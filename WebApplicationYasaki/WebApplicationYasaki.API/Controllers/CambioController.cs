@@ -1,69 +1,110 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using WebApplicationYasaki.API.Models;
+using Microsoft.Extensions.Caching.Memory;
+using System.Net.Http.Json;
 
 namespace WebApplicationYasaki.API.Controllers
 {
-
     [ApiController]
-    [Route("api/[controller]")] // Rota de acesso: /api/cambio
+    [Route("api/[controller]")]
     public class CambioController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IMemoryCache _cache;
 
-        // Construtor que recebe o criador de clientes HTTP do .NET
-        public CambioController(IHttpClientFactory httpClientFactory)
+        public CambioController(IHttpClientFactory httpClientFactory, IMemoryCache cache)
         {
             _httpClientFactory = httpClientFactory;
+            _cache = cache;
         }
 
-        /// <summary>
-        /// GET: api/cambio/converter?de=USD&para=EUR
-        /// </summary>
         [HttpGet("converter")]
-        public async Task<IActionResult> ObterCambio(string de = "USD", string para = "EUR")
+        public async Task<IActionResult> ObterCambio([FromQuery] string de, [FromQuery] string para)
         {
-            // Normaliza para maiúsculas (ex: usd -> USD)
-            de = de.ToUpper();
-            para = para.ToUpper();
+            if (string.IsNullOrEmpty(de) || string.IsNullOrEmpty(para))
+            {
+                return BadRequest("Os parâmetros 'de' e 'para' são obrigatórios.");
+            }
+
+            de = de.ToUpper().Trim();
+            para = para.ToUpper().Trim();
+
+            string cacheKey = $"cambio_{de}_{para}";
+
+            // 1. Tenta recuperar da cache para evitar o erro 429 (Muitas requisições)
+            if (_cache.TryGetValue(cacheKey, out object? resultadoGuardado) && resultadoGuardado is not null)
+            {
+                return Ok(resultadoGuardado);
+            }
 
             try
             {
-                // Criamos o cliente HTTP para fazer o pedido externo
                 var client = _httpClientFactory.CreateClient();
+                string url;
+                bool inverterTaxa = false;
 
-                // URL da AwesomeAPI para consultar o par de moedas desejado
-                string url = $"https://economia.awesomeapi.com.br/last/{de}-{para}";
+                if (de == "BRL")
+                {
+                    url = $"https://economia.awesomeapi.com.br/last/{para}-{de}";
+                    inverterTaxa = true;
+                }
+                else
+                {
+                    url = $"https://economia.awesomeapi.com.br/last/{de}-{para}";
+                }
 
                 var response = await client.GetAsync(url);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    return BadRequest($"Não foi possível obter a conversão para o par {de}-{para}. Verifique se as siglas estão corretas.");
+                    var erroApi = await response.Content.ReadAsStringAsync();
+                    return StatusCode((int)response.StatusCode, $"Erro na API externa: {erroApi}");
                 }
 
-                // Deserializa o JSON recebido para a nossa estrutura C#
-                var dados = await response.Content.ReadFromJsonAsync<AwesomeApiResponse>();
+                // Lemos a resposta diretamente como Dicionários Genéricos do C#!
+                // Isso descarta a necessidade de QUALQUER classe auxiliar (como InfoCambioRapido).
+                var dados = await response.Content.ReadFromJsonAsync<Dictionary<string, Dictionary<string, string>>>();
+                string chave = inverterTaxa ? $"{para}{de}" : $"{de}{para}";
 
-                string chave = $"{de}{para}"; // Ex: "USDEUR"
-                if (dados != null && dados.TryGetValue(chave, out var infoCambio))
+                if (dados != null && dados.TryGetValue(chave, out var info))
                 {
-                    // Devolvemos um JSON limpo e bem estruturado para o nosso front-end
-                    return Ok(new
+                    // Lemos os textos do dicionário usando as chaves em minúsculo da AwesomeAPI
+                    decimal taxa = Convert.ToDecimal(info["bid"], System.Globalization.CultureInfo.InvariantCulture);
+                    decimal maximo = Convert.ToDecimal(info["high"], System.Globalization.CultureInfo.InvariantCulture);
+                    decimal minimo = Convert.ToDecimal(info["low"], System.Globalization.CultureInfo.InvariantCulture);
+                    string nomeOriginal = info["name"];
+
+                    if (inverterTaxa)
+                    {
+                        taxa = 1 / taxa;
+                        decimal tempMax = maximo;
+                        maximo = 1 / minimo;
+                        minimo = 1 / tempMax;
+                    }
+
+                    var respostaSucesso = new
                     {
                         Par = $"{de}/{para}",
-                        Nome = infoCambio.name,
-                        TaxaAtual = Convert.ToDecimal(infoCambio.bid, System.Globalization.CultureInfo.InvariantCulture),
-                        UltimoMaximo = Convert.ToDecimal(infoCambio.high, System.Globalization.CultureInfo.InvariantCulture),
-                        UltimoMinimo = Convert.ToDecimal(infoCambio.low, System.Globalization.CultureInfo.InvariantCulture),
+                        Nome = inverterTaxa ? $"Real Brasileiro/{nomeOriginal.Split('/')[0]}" : nomeOriginal,
+                        TaxaAtual = taxa,
+                        UltimoMaximo = maximo,
+                        UltimoMinimo = minimo,
                         DataConsulta = DateTime.Now
-                    });
+                    };
+
+                    // Salva o resultado na cache por 3 minutos
+                    var cacheOptions = new MemoryCacheEntryOptions()
+                        .SetAbsoluteExpiration(TimeSpan.FromMinutes(3));
+
+                    _cache.Set(cacheKey, respostaSucesso, cacheOptions);
+
+                    return Ok(respostaSucesso);
                 }
 
-                return NotFound("Dados de câmbio não encontrados no retorno.");
+                return NotFound("Não foi possível processar as informações do par solicitado.");
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro interno ao processar conversão: {ex.Message}");
+                return StatusCode(500, $"Erro interno no servidor: {ex.Message}");
             }
         }
     }

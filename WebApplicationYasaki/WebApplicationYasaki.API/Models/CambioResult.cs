@@ -1,21 +1,46 @@
-﻿using System.Collections;
+﻿using System.Text.Json.Serialization;
 
 namespace WebApplicationYasaki.API.Models
 {
-    public class CambioResult
+    // A AwesomeAPI retorna chaves dinâmicas baseadas nas moedas consultadas (ex: "USDEUR").
+    // Herdando de Dictionary<string, InfoCambio>, o .NET mapeia dinamicamente qualquer par.
+    public class AwesomeApiResponse : Dictionary<string, InfoCambio>
     {
-        // Esta classe vai mapear a resposta JSON da AwesomeAPI para USD-EUR ou BRL-EUR, etc.
-        public string code { get; set; } = string.Empty;
-        public string codein { get; set; } = string.Empty;
-        public string name { get; set; } = string.Empty;
-        public string high { get; set; } = string.Empty;
-        public string low { get; set; } = string.Empty;
-        public string bid { get; set; } = string.Empty;
+    }
 
+    public class InfoCambio
+    {
+        [JsonPropertyName("code")]
+        public string code { get; set; }
+
+        [JsonPropertyName("codein")]
+        public string codein { get; set; }
+
+        [JsonPropertyName("name")]
+        public string name { get; set; }
+
+        [JsonPropertyName("high")]
+        public string high { get; set; }
+
+        [JsonPropertyName("low")]
+        public string low { get; set; }
+
+        [JsonPropertyName("varBid")]
+        public string varBid { get; set; }
+
+        [JsonPropertyName("pctChange")]
+        public string pctChange { get; set; }
+
+        [JsonPropertyName("bid")]
+        public string bid { get; set; }
+
+        [JsonPropertyName("ask")]
+        public string ask { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public string timestamp { get; set; }
+
+        [JsonPropertyName("create_date")]
+        public string create_date { get; set; }
     }
-    // A API externa devolve um dicionário onde a chave é o par de moedas (ex: "USDEUR")
-    public class AwesomeApiResponse : Dictionary<String, CambioResult>
-    { 
-    }
-        
 }

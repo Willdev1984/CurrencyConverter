@@ -5,6 +5,7 @@ builder.Services.AddControllersWithViews();
 
 // Regista o serviço necessário para fazer requisições HTTP para fora (APIs externas)
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 

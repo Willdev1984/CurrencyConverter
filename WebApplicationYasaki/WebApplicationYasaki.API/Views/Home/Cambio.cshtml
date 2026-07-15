@@ -12,9 +12,12 @@
             <div class="mb-4 text-start">
                 <label for="seletorMoedas" class="form-label fw-bold text-muted">Selecione o Par de Moedas:</label>
                 <select class="form-select" id="seletorMoedas" onchange="atualizarCambio()">
-                    <option value="USD-EUR" selected>Dólar Americano (USD) para Euro (EUR)</option>
-                    <option value="BRL-EUR">Real Brasileiro (BRL) para Euro (EUR)</option>
-                    <option value="BRL-USD">Real Brasileiro (BRL) para Dólar (USD)</option>
+                    <option value="BRL-EUR" selected>1 Real Brasileiro (BRL) para Euro (EUR)</option>
+                    <option value="USD-EUR">1 Dólar Americano (USD) para 1 Euro (EUR)</option>
+                    <option value="EUR-USD">1 Euro (EUR) para 1 Dólar Americano (USD)</option>
+                    <option value="EUR-BRL">1 Euro (EUR) para 1 Real Brasileiro (BRL)</option>
+                    <option value="BRL-USD">1 Real Brasileiro (BRL) para 1 Dólar (USD)</option>
+                    <option value="USD-BRL">1 Dólar (USD) para 1 Real Brasileiro (BRL)</option>
                 </select>
             </div>
 
@@ -50,37 +53,51 @@
 </div>
 
 <script>
-    async function atualizarCambio() {
+            async function atualizarCambio() {
+        const seletor = document.getElementById('seletorMoedas');
+        const parMoedasEl = document.getElementById('parMoedas');
+
         try {
-            const parSelecionado = document.getElementById('seletorMoedas').value;
+            // 1. Mostra estado de carregamento
+            parMoedasEl.innerText = "A carregar taxas...";
+
+            const parSelecionado = seletor.value; // Ex: "USD-EUR"
             const [moedaOrigem, moedaDestino] = parSelecionado.split('-');
 
-            document.getElementById('parMoedas').innerText = "A consultar...";
-
-            // Ajustado para bater exatamente com a caixa do nome do Controller (Cambio)
+            // 2. Faz a chamada ao seu controller .NET
             const resposta = await fetch(`/api/Cambio/converter?de=${moedaOrigem}&para=${moedaDestino}`);
 
-            if (!resposta.ok) throw new Error('Erro ao buscar dados da API.');
+            if (resposta.status === 429) {
+                throw new Error('Muitas requisições. Aguarde 1 minuto.');
+            }
+
+            if (!resposta.ok) {
+                throw new Error('Falha ao obter cotação.');
+            }
 
             const dados = await resposta.json();
 
-            let simbolo = moedaDestino;
-            if (moedaDestino === 'EUR') simbolo = '€';
-            if (moedaDestino === 'USD') simbolo = '$';
+            // 3. Define o símbolo da moeda de destino
+            let simbolo = "R$";
+            if (moedaDestino === "USD") simbolo = "$";
+            if (moedaDestino === "EUR") simbolo = "€";
 
-            document.getElementById('parMoedas').innerText = dados.nome;
-            document.getElementById('valorCambio').innerText = dados.taxaAtual.toFixed(4);
+            // 4. Atualiza a Interface
+            parMoedasEl.innerText = dados.nome || `${moedaOrigem} para ${moedaDestino}`;
+            document.getElementById('valorCambio').innerText = Number(dados.taxaAtual).toFixed(4);
             document.getElementById('moedaDestino').innerText = simbolo;
-            document.getElementById('maximo').innerText = dados.ultimoMaximo.toFixed(4);
-            document.getElementById('minimo').innerText = dados.ultimoMinimo.toFixed(4);
+            document.getElementById('maximo').innerText = Number(dados.ultimoMaximo).toFixed(4);
+            document.getElementById('minimo').innerText = Number(dados.ultimoMinimo).toFixed(4);
             document.getElementById('dataAtualizacao').innerText = new Date(dados.dataConsulta).toLocaleTimeString('pt-PT');
 
         } catch (erro) {
-            console.error(erro);
-            document.getElementById('parMoedas').innerText = "Erro ao carregar cotações.";
+            console.error("Erro capturado no JS:", erro);
+            parMoedasEl.innerText = erro.message.includes('Muitas')
+                ? "Limite de consultas excedido. Aguarde."
+                : "Erro ao carregar cotações.";
         }
     }
 
-    // Executa assim que o script é lido pelo navegador
+    // Executa automaticamente ao carregar a página
     window.onload = atualizarCambio;
 </script>
