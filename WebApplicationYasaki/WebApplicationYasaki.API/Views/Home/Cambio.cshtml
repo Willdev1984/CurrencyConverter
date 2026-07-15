@@ -1,0 +1,86 @@
+﻿@{
+    ViewData["Title"] = "Câmbio em Tempo Real";
+}
+
+<div class="container mt-5" style="max-width: 500px;">
+    <div class="card shadow-sm border-primary">
+        <div class="card-header bg-primary text-white text-center">
+            <h3 class="mb-0"><i class="bi bi-currency-exchange me-2"></i>Câmbio do Dia</h3>
+        </div>
+        <div class="card-body text-center py-4">
+
+            <div class="mb-4 text-start">
+                <label for="seletorMoedas" class="form-label fw-bold text-muted">Selecione o Par de Moedas:</label>
+                <select class="form-select" id="seletorMoedas" onchange="atualizarCambio()">
+                    <option value="USD-EUR" selected>Dólar Americano (USD) para Euro (EUR)</option>
+                    <option value="BRL-EUR">Real Brasileiro (BRL) para Euro (EUR)</option>
+                    <option value="BRL-USD">Real Brasileiro (BRL) para Dólar (USD)</option>
+                </select>
+            </div>
+
+            <hr>
+
+            <h5 class="text-muted mt-3" id="parMoedas">A carregar taxas...</h5>
+
+            <div class="my-4">
+                <span class="display-3 fw-bold text-success" id="valorCambio">0.0000</span>
+                <span class="fs-4 text-success" id="moedaDestino"></span>
+            </div>
+
+            <div class="row text-muted mt-3">
+                <div class="col-6 border-end">
+                    <small>Máximo</small>
+                    <p class="mb-0 fw-bold text-danger" id="maximo">0.0000</p>
+                </div>
+                <div class="col-6">
+                    <small>Mínimo</small>
+                    <p class="mb-0 fw-bold text-info" id="minimo">0.0000</p>
+                </div>
+            </div>
+
+            <hr>
+            <button class="btn btn-outline-primary" onclick="atualizarCambio()">
+                <i class="bi bi-arrow-clockwise me-2"></i>Atualizar Agora
+            </button>
+        </div>
+        <div class="card-footer text-muted text-center py-2" style="font-size: 0.8rem;">
+            Última consulta: <span id="dataAtualizacao">-</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function atualizarCambio() {
+        try {
+            const parSelecionado = document.getElementById('seletorMoedas').value;
+            const [moedaOrigem, moedaDestino] = parSelecionado.split('-');
+
+            document.getElementById('parMoedas').innerText = "A consultar...";
+
+            // Ajustado para bater exatamente com a caixa do nome do Controller (Cambio)
+            const resposta = await fetch(`/api/Cambio/converter?de=${moedaOrigem}&para=${moedaDestino}`);
+
+            if (!resposta.ok) throw new Error('Erro ao buscar dados da API.');
+
+            const dados = await resposta.json();
+
+            let simbolo = moedaDestino;
+            if (moedaDestino === 'EUR') simbolo = '€';
+            if (moedaDestino === 'USD') simbolo = '$';
+
+            document.getElementById('parMoedas').innerText = dados.nome;
+            document.getElementById('valorCambio').innerText = dados.taxaAtual.toFixed(4);
+            document.getElementById('moedaDestino').innerText = simbolo;
+            document.getElementById('maximo').innerText = dados.ultimoMaximo.toFixed(4);
+            document.getElementById('minimo').innerText = dados.ultimoMinimo.toFixed(4);
+            document.getElementById('dataAtualizacao').innerText = new Date(dados.dataConsulta).toLocaleTimeString('pt-PT');
+
+        } catch (erro) {
+            console.error(erro);
+            document.getElementById('parMoedas').innerText = "Erro ao carregar cotações.";
+        }
+    }
+
+    // Executa assim que o script é lido pelo navegador
+    window.onload = atualizarCambio;
+</script>

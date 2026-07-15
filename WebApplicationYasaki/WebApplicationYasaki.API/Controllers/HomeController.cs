@@ -17,6 +17,10 @@ namespace WebApplicationYasaki.API.Controllers
         {
             return View();
         }
+        public IActionResult Cambio()
+        {
+            return View();
+        }
 
         public IActionResult Privacy()
         {
