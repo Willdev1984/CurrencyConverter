@@ -1,0 +1,10 @@
+## Ficheiros de utilizador e pastas do Visual Studio
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
+## Ficheiros gerados pelo sistema operativo
+.DS_Store
+Thumbs.db
